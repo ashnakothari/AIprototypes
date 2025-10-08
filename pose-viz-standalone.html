@@ -1,0 +1,377 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Yoga Pose Metadata Visualization</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.2/papaparse.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            padding: 40px;
+            background-color: #f5f5f5;
+            min-height: 100vh;
+        }
+
+        h1 {
+            text-align: center;
+            color: #333;
+            margin-bottom: 30px;
+            font-size: 32px;
+        }
+
+        .selector-container {
+            text-align: center;
+            margin-bottom: 50px;
+        }
+
+        .selector-container label {
+            font-size: 18px;
+            font-weight: bold;
+            margin-right: 15px;
+            color: #555;
+        }
+
+        .selector-container select {
+            padding: 12px 24px;
+            font-size: 16px;
+            border-radius: 8px;
+            border: 2px solid #6B73FF;
+            background-color: white;
+            cursor: pointer;
+            min-width: 300px;
+        }
+
+        .diagram-container {
+            position: relative;
+            max-width: 1200px;
+            margin: 0 auto;
+            height: 700px;
+            background-color: white;
+            border-radius: 16px;
+            padding: 40px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+        }
+
+        .center-node {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: linear-gradient(135deg, #90EE90 0%, #7FD87F 100%);
+            border: 3px solid #4CAF50;
+            border-radius: 16px;
+            padding: 24px 40px;
+            text-align: center;
+            box-shadow: 0 4px 12px rgba(76,175,80,0.3);
+            z-index: 10;
+        }
+
+        .center-node .pose-name {
+            font-size: 28px;
+            font-weight: bold;
+            color: #2E7D32;
+            margin-bottom: 8px;
+        }
+
+        .center-node .sanskrit-name {
+            font-size: 14px;
+            color: #558B2F;
+            font-style: italic;
+        }
+
+        .metadata-node {
+            position: absolute;
+            background: linear-gradient(135deg, #FFB6C1 0%, #FF9FAF 100%);
+            border: 3px solid #FF6B8A;
+            border-radius: 20px;
+            padding: 16px 20px;
+            box-shadow: 0 3px 10px rgba(0,0,0,0.15);
+        }
+
+        .metadata-node .title {
+            font-size: 16px;
+            font-weight: bold;
+            color: #8B0000;
+            margin-bottom: 10px;
+        }
+
+        .metadata-node .item {
+            font-size: 12px;
+            color: #444;
+            margin-top: 6px;
+            line-height: 1.4;
+        }
+
+        .cues-node {
+            position: absolute;
+            background: linear-gradient(135deg, #FFB6C1 0%, #FF9FAF 100%);
+            border: 3px solid #FF6B8A;
+            border-radius: 20px;
+            padding: 16px 20px;
+            box-shadow: 0 3px 10px rgba(0,0,0,0.15);
+            width: 280px;
+            max-height: 150px;
+            overflow-y: hidden;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            z-index: 5;
+        }
+
+        .cues-node.expanded {
+            width: 450px;
+            max-height: 500px;
+            overflow-y: auto;
+            z-index: 20;
+        }
+
+        .cues-node .title {
+            font-size: 16px;
+            font-weight: bold;
+            color: #8B0000;
+            margin-bottom: 10px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .cues-node .expand-icon {
+            font-size: 20px;
+        }
+
+        .cues-node .cue-text {
+            font-size: 12px;
+            color: #444;
+            margin-top: 6px;
+            line-height: 1.4;
+        }
+
+        .cues-node .hint {
+            font-size: 11px;
+            color: #666;
+            margin-top: 8px;
+            font-style: italic;
+        }
+    </style>
+</head>
+<body>
+    <h1>Yoga Pose Metadata Visualization</h1>
+    
+    <div class="selector-container">
+        <label for="poseSelect">Select Pose:</label>
+        <select id="poseSelect"></select>
+    </div>
+
+    <div class="diagram-container">
+        <!-- Center Node -->
+        <div class="center-node">
+            <div class="pose-name" id="poseName"></div>
+            <div class="sanskrit-name" id="sanskritName"></div>
+        </div>
+
+        <!-- Top - Bilateral/Unilateral -->
+        <div class="metadata-node" style="top: 5%; left: 50%; transform: translateX(-50%); width: 200px;">
+            <div class="title" id="bilateralTitle"></div>
+        </div>
+
+        <!-- Top Right - Categories -->
+        <div class="metadata-node" style="top: 12%; right: 10%; width: 200px;">
+            <div class="title">Categories</div>
+            <div id="categoriesContainer"></div>
+        </div>
+
+        <!-- Right - Duration -->
+        <div class="metadata-node" style="top: 45%; right: 5%; width: 200px;">
+            <div class="title">Duration</div>
+            <div class="item" id="durationMin"></div>
+            <div class="item" id="durationMax"></div>
+        </div>
+
+        <!-- Bottom Right - Cues (Expandable) -->
+        <div class="cues-node" id="cuesNode" style="bottom: 12%; right: 10%;">
+            <div class="title">
+                <span>Cues</span>
+                <span class="expand-icon" id="expandIcon">+</span>
+            </div>
+            <div class="cue-text">
+                <strong>Standard:</strong> <span id="standardCue"></span>
+            </div>
+            <div class="cue-text" id="advancedCueContainer" style="margin-top: 10px;">
+                <strong>Advanced:</strong> <span id="advancedCue"></span>
+            </div>
+            <div class="hint" id="cueHint">Click to expand</div>
+        </div>
+
+        <!-- Bottom Left - Body Parts -->
+        <div class="metadata-node" style="bottom: 12%; left: 10%; width: 280px;">
+            <div class="title">Body Parts</div>
+            <div class="item" id="primaryParts"></div>
+            <div class="item" id="secondaryParts"></div>
+        </div>
+
+        <!-- Left - Preceding Poses -->
+        <div class="metadata-node" style="top: 45%; left: 5%; width: 200px;">
+            <div class="title">Preceding Poses</div>
+            <div id="precedingContainer"></div>
+        </div>
+
+        <!-- Top Left - Succeeding Poses -->
+        <div class="metadata-node" style="top: 12%; left: 10%; width: 200px;">
+            <div class="title">Succeeding Poses</div>
+            <div id="succeedingContainer"></div>
+        </div>
+    </div>
+
+    <script>
+        const csvData = `Pose Name,Sanskrit Name,Categories,Bilateral_Unilateral,Standard_Cue,Advanced_Variation,Duration_Min_sec,Duration_Max_sec,Primary_Body_Parts,Secondary_Body_Parts,Preceding_Poses,Succeeding_Poses
+Half Moon,Ardha Chandrasana,Standing | Balance,Unilateral,"Stand on one leg and hinge forward at hip. Place bottom hand on floor or block about 12 inches in front of standing foot. Lift back leg parallel to floor and stack hips vertically. Extend top arm up toward ceiling. Gaze can be down for balance or up toward top hand. Modifications: Use a block under bottom hand or practice with back against wall for support.",Chapasana (Sugar Cane Pose): Bend lifted leg and catch foot with top hand then kick foot into hand for a backbend variation,35,60,Legs | Core | Obliques,Back | Hips | Arms | Shoulders,Warrior 2 | Triangle | Extended Side Angle,Standing Forward Fold | Warrior 2 | Tree Pose
+Easy Seat,Sukhasana,Seated,Bilateral,"Sit on floor and cross shins with each foot beneath opposite knee. Sit on blanket or block if hips are tight. Lengthen spine upward and rest hands on knees or in lap. Draw shoulders back and down. Keep chin parallel to floor. Modifications: Sit on cushion to elevate hips above knees or extend legs forward if knees are uncomfortable.",N/A,20,300,Hips | Spine,Core | Lower Back,Mountain Pose | Child's Pose,Seated Twist | Meditation | Forward Fold
+Bridge Pose,Setu Bandha Sarvangasana,Supine | Backbend,Bilateral,"Lie on back with knees bent and feet hip-width apart placed close to hips. Press feet firmly into floor and lift hips toward ceiling. Roll shoulders under and walk shoulder blades closer together. Interlace fingers beneath body or keep arms alongside body pressing down. Keep knees aligned over ankles. Modifications: Place block under sacrum for supported version or keep arms by sides instead of clasping hands.",Eka Pada Setu Bandhasana: Lift one leg straight up toward ceiling while maintaining bridge. Can progress to Wheel Pose (Urdhva Dhanurasana),35,90,Glutes | Hamstrings | Back,Core | Chest | Shoulders | Quads,Supine Twist | Knees to Chest,Wheel Pose | Shoulder Stand | Fish Pose | Savasana
+Triangle Pose,Trikonasana,Standing,Unilateral,"Stand with feet wide apart and turn front foot out 90 degrees. Extend arms out to sides at shoulder height. Reach front arm forward then hinge at hip bringing front hand down to shin ankle or block. Back hand can rest on hip or extend straight up. Press firmly through both feet and rotate chest open toward ceiling. Keep both legs straight. Modifications: Use block under bottom hand for more height or rest top hand on hip for less shoulder engagement.",Baddha Trikonasana (Bound Triangle): Reach bottom arm behind front leg and top arm behind back to clasp hands together,35,60,Legs | Obliques | Hips,Back | Shoulders | Chest | Core,Warrior 2 | Extended Side Angle,Half Moon | Wide-Legged Forward Fold | Pyramid Pose
+Shoulder Stand,Salamba Sarvangasana,Inverted | Inversion,Bilateral,"Lie on back with folded blanket positioned under shoulders and arms alongside body. Bend knees and lift legs up and overhead. Support lower back with hands and walk elbows closer together. Straighten legs toward ceiling keeping weight on shoulders and upper arms not on neck. Press firmly through upper arms and lift hips high. Modifications: Practice with legs up wall or keep legs in bent position. Use 2-3 blankets under shoulders to protect neck.",Niralamba Sarvangasana (Unsupported Shoulder Stand): Release hands from back and extend arms flat on floor alongside body or lift arms parallel to legs,45,180,Shoulders | Upper Back | Core,Neck | Arms | Legs,Bridge Pose | Plow Pose,Plow Pose | Fish Pose | Seated Forward Fold
+Downward Dog,Adho Mukha Svanasana,Standing | Inversion,Bilateral,"Start on hands and knees with hands shoulder-width apart and knees hip-width apart. Spread fingers wide and press firmly through entire palm. Tuck toes under and lift hips up and back creating inverted V shape. Press chest toward thighs and work heels toward floor. Keep slight bend in knees if hamstrings are tight. Relax head and neck. Modifications: Keep generous bend in knees or practice with hands elevated on blocks or against wall.",Eka Pada Adho Mukha Svanasana: Lift one leg high keeping hips level then can open hip and bend knee for deeper hip stretch,35,120,Arms | Shoulders | Hamstrings | Calves,Back | Core | Wrists,Plank | Child's Pose | Table Top,Forward Fold | Plank | Warrior 1 | Lunge
+Dancer's Pose,Natarajasana,Standing | Balance | Backbend,Unilateral,"Stand with feet together and shift weight completely onto one leg. Bend opposite knee and reach back to catch inside of ankle or foot with same-side hand. Press foot firmly into hand while hinging forward slightly from hips. Reach opposite arm forward and up for balance. Keep standing leg strong and gaze forward at fixed point. Modifications: Use strap looped around lifted foot if cannot reach or practice near wall for balance support.",Natarajasana Full Expression: Reach both hands overhead to catch lifted foot and kick foot strongly into hands while bringing torso more upright and deepening backbend,40,60,Legs | Back | Shoulders,Core | Chest | Hips | Glutes,Mountain Pose | Tree Pose | Warrior 3,Standing Forward Fold | Mountain Pose | Half Moon`;
+
+        let poses = [];
+        let expandedCues = false;
+
+        // Parse CSV
+        Papa.parse(csvData, {
+            header: true,
+            skipEmptyLines: true,
+            complete: function(results) {
+                poses = results.data;
+                initializeApp();
+            }
+        });
+
+        function initializeApp() {
+            const select = document.getElementById('poseSelect');
+            
+            // Populate dropdown
+            poses.forEach(pose => {
+                const option = document.createElement('option');
+                option.value = pose['Pose Name'];
+                option.textContent = `${pose['Pose Name']} (${pose['Sanskrit Name']})`;
+                select.appendChild(option);
+            });
+
+            // Set initial pose
+            updateVisualization(poses[0]);
+
+            // Add change listener
+            select.addEventListener('change', (e) => {
+                const selectedPose = poses.find(p => p['Pose Name'] === e.target.value);
+                expandedCues = false; // Reset expansion when changing poses
+                updateVisualization(selectedPose);
+            });
+
+            // Add click listener for cues expansion
+            const cuesNode = document.getElementById('cuesNode');
+            cuesNode.addEventListener('click', () => {
+                expandedCues = !expandedCues;
+                const selectedPose = poses.find(p => p['Pose Name'] === select.value);
+                updateCuesDisplay(selectedPose);
+            });
+        }
+
+        function updateVisualization(pose) {
+            // Center node
+            document.getElementById('poseName').textContent = pose['Pose Name'];
+            document.getElementById('sanskritName').textContent = pose['Sanskrit Name'];
+
+            // Bilateral/Unilateral
+            document.getElementById('bilateralTitle').textContent = pose['Bilateral_Unilateral'];
+
+            // Cues
+            updateCuesDisplay(pose);
+
+            // Duration
+            document.getElementById('durationMin').textContent = `• Min: ${pose['Duration_Min_sec']}s`;
+            document.getElementById('durationMax').textContent = `• Max: ${pose['Duration_Max_sec']}s`;
+
+            // Categories
+            const categories = pose['Categories'].split('|').map(c => c.trim());
+            const categoriesContainer = document.getElementById('categoriesContainer');
+            categoriesContainer.innerHTML = '';
+            categories.forEach(cat => {
+                const div = document.createElement('div');
+                div.className = 'item';
+                div.textContent = `• ${cat}`;
+                categoriesContainer.appendChild(div);
+            });
+
+            // Pose Flow - now split into two separate nodes
+            const precedingPoses = pose['Preceding_Poses'].split('|').map(p => p.trim());
+            const succeedingPoses = pose['Succeeding_Poses'].split('|').map(p => p.trim());
+            
+            // Preceding Poses (left side)
+            const precedingContainer = document.getElementById('precedingContainer');
+            precedingContainer.innerHTML = '';
+            precedingPoses.forEach(p => {
+                const div = document.createElement('div');
+                div.className = 'item';
+                div.textContent = `• ${p}`;
+                precedingContainer.appendChild(div);
+            });
+
+            // Succeeding Poses (top left)
+            const succeedingContainer = document.getElementById('succeedingContainer');
+            succeedingContainer.innerHTML = '';
+            succeedingPoses.forEach(p => {
+                const div = document.createElement('div');
+                div.className = 'item';
+                div.textContent = `• ${p}`;
+                succeedingContainer.appendChild(div);
+            });
+
+            // Body Parts
+            const primaryParts = pose['Primary_Body_Parts'].split('|').map(p => p.trim());
+            const secondaryParts = pose['Secondary_Body_Parts'].split('|').map(p => p.trim());
+            document.getElementById('primaryParts').textContent = `Primary: ${primaryParts.join(', ')}`;
+            document.getElementById('secondaryParts').textContent = `Secondary: ${secondaryParts.join(', ')}`;
+        }
+
+        function updateCuesDisplay(pose) {
+            const cuesNode = document.getElementById('cuesNode');
+            const standardCueEl = document.getElementById('standardCue');
+            const advancedCueEl = document.getElementById('advancedCue');
+            const advancedContainer = document.getElementById('advancedCueContainer');
+            const expandIcon = document.getElementById('expandIcon');
+            const hint = document.getElementById('cueHint');
+
+            if (expandedCues) {
+                cuesNode.classList.add('expanded');
+                standardCueEl.textContent = pose['Standard_Cue'];
+                expandIcon.textContent = '−';
+                hint.style.display = 'none';
+            } else {
+                cuesNode.classList.remove('expanded');
+                const truncated = pose['Standard_Cue'].substring(0, 60) + '...';
+                standardCueEl.textContent = truncated;
+                expandIcon.textContent = '+';
+                hint.style.display = 'block';
+            }
+
+            // Handle advanced variation
+            if (pose['Advanced_Variation'] !== 'N/A') {
+                advancedContainer.style.display = 'block';
+                if (expandedCues) {
+                    advancedCueEl.textContent = pose['Advanced_Variation'];
+                } else {
+                    const truncated = pose['Advanced_Variation'].substring(0, 50) + '...';
+                    advancedCueEl.textContent = truncated;
+                }
+            } else {
+                advancedContainer.style.display = 'none';
+            }
+        }
+    </script>
+</body>
+</html>
